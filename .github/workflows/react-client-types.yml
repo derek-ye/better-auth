@@ -1,0 +1,53 @@
+name: React client compatibility
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  typecheck:
+    name: Better Auth ${{ matrix.better-auth }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - better-auth: "1.6.11"
+            better-fetch: "1.1.21"
+            vitest: "4.1.5"
+          - better-auth: "1.6.15"
+            better-fetch: "1.1.21"
+            vitest: "4.1.5"
+          - better-auth: "1.6.22"
+            better-fetch: "1.3.1"
+            vitest: "4.1.5"
+          - better-auth: "1.6.33"
+            better-fetch: "1.3.1"
+            vitest: "4.1.10"
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6
+        with:
+          node-version: "24.x"
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - name: Install Better Auth version
+        env:
+          BETTER_AUTH_VERSION: ${{ matrix.better-auth }}
+          BETTER_FETCH_VERSION: ${{ matrix.better-fetch }}
+          VITEST_VERSION: ${{ matrix.vitest }}
+        run: >-
+          npm install --no-save --ignore-scripts
+          "better-auth@$BETTER_AUTH_VERSION"
+          "@better-auth/core@$BETTER_AUTH_VERSION"
+          "@better-auth/test-utils@$BETTER_AUTH_VERSION"
+          "@better-fetch/fetch@$BETTER_FETCH_VERSION" "vitest@$VITEST_VERSION"
+      - run: npm run build
+      - run: npx vitest run --typecheck.only src/react/index.test-d.ts

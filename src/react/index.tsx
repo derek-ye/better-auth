@@ -1,5 +1,12 @@
 import type { PropsWithChildren, ReactNode } from "react";
-import { Component, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  Component,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import type { AuthTokenFetcher } from "convex/browser";
 import {
   Authenticated,
@@ -8,7 +15,6 @@ import {
   useQuery,
 } from "convex/react";
 import type { FunctionReference } from "convex/server";
-import type { BetterAuthClientPlugin } from "better-auth";
 import type { createAuthClient } from "better-auth/react";
 import type {
   convexClient,
@@ -18,24 +24,23 @@ import type { EmptyObject } from "convex-helpers";
 
 type CrossDomainClient = ReturnType<typeof crossDomainClient>;
 type ConvexClient = ReturnType<typeof convexClient>;
-type PluginsWithCrossDomain = (
-  | CrossDomainClient
-  | ConvexClient
-  | BetterAuthClientPlugin
-)[];
-type PluginsWithoutCrossDomain = (ConvexClient | BetterAuthClientPlugin)[];
+// Keep plugin types concrete: BetterAuthClientPlugin erases endpoint inference
+// and can cause Better Auth's inferred session type to resolve to never.
+type PluginsWithCrossDomain = (CrossDomainClient | ConvexClient)[];
+type PluginsWithoutCrossDomain = ConvexClient[];
 type AuthClientWithPlugins<
   Plugins extends PluginsWithCrossDomain | PluginsWithoutCrossDomain,
-> = ReturnType<
-  typeof createAuthClient<
-    BetterAuthClientPlugin & {
-      plugins: Plugins;
-    }
-  >
->;
+> = ReturnType<typeof createAuthClient<{ plugins: Plugins }>>;
 export type AuthClient =
   | AuthClientWithPlugins<PluginsWithCrossDomain>
   | AuthClientWithPlugins<PluginsWithoutCrossDomain>;
+
+// Only require the methods used here. Other client members can depend on
+// additional plugins and need not match our baseline client.
+type ProviderAuthClient = Pick<
+  AuthClientWithPlugins<PluginsWithoutCrossDomain>,
+  "useSession" | "getSession" | "convex"
+>;
 
 // Until we can import from our own entry points (requires TypeScript 4.7),
 // just describe the interface enough to help users pass the right type.
@@ -58,7 +63,7 @@ export function ConvexBetterAuthProvider({
 }: {
   children: ReactNode;
   client: IConvexReactClient;
-  authClient: AuthClient;
+  authClient: ProviderAuthClient;
   initialToken?: string | null;
 }) {
   const useBetterAuth = useUseAuthFromBetterAuth(authClient, initialToken);
@@ -102,7 +107,7 @@ export function ConvexBetterAuthProvider({
 let initialTokenUsed = false;
 
 function useUseAuthFromBetterAuth(
-  authClient: AuthClient,
+  authClient: ProviderAuthClient,
   initialToken?: string | null
 ) {
   const [cachedToken, setCachedToken] = useState<string | null>(
@@ -282,7 +287,7 @@ export const AuthBoundary = ({
   isAuthError,
 }: PropsWithChildren<{
   onUnauth: () => void | Promise<void>;
-  authClient: AuthClient;
+  authClient: ProviderAuthClient;
   renderFallback?: () => React.ReactNode;
   getAuthUserFn: FunctionReference<"query", "public", EmptyObject>;
   isAuthError: (error: unknown) => boolean;
